@@ -1,0 +1,26 @@
+{
+    "go.toolsEnvVars": {
+        "GOOS": "linux",
+        "GOARCH": "arm"
+    },
+    "go.buildFlags": [
+        "-tags=tinygo"
+    ],
+    // fix for gopls static analysis
+    "go.testEnvVars": {
+        "GOARCH": "arm"
+    },
+    // Disabilita la diagnostica su errori di dipendenze esterne
+    // che sono spesso falsi positivi quando si usa TinyGo
+    "go.vetFlags": ["-all", "-shadow"],
+    "gopls": {
+        "build.env": {
+            "GOOS": "linux",
+            "GOARCH": "arm",
+            "GOROOT": "/home/enrico/.cache/tinygo/goroot-10cb9f3e2591ed8e188e79c0715ac5b487703eb2a84a9c2161da53f8e9551c02"
+        },
+        "build.buildFlags": [
+            "-tags=cortexm,baremetal,linux,arm,rp2350,rp,pico2,pico2-w,cyw43439,tinygo,purego,osusergo,math_big_pure_go,gc.conservative,scheduler.cores,serial.usb"
+        ]
+    }
+}
