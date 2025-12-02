@@ -1,14 +1,18 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"image/color"
+	"log/slog"
 	"machine"
 	"time"
 
 	"tinygo.org/x/drivers/ssd1306"
 	"tinygo.org/x/tinyfont"
 	"tinygo.org/x/tinyfont/proggy"
+
+	"github.com/soypat/cyw43439"
 )
 
 var display *ssd1306.Device
@@ -44,6 +48,27 @@ func main() {
 	time.Sleep(3 * time.Second)
 	display.ClearDisplay()
 
+	go func() {
+		time.Sleep(10 * time.Second)
+		fmt.Print("starting AP\r\n")
+
+		dev := cyw43439.NewPicoWDevice()
+		cfg := cyw43439.DefaultWifiConfig()
+		cfg.Logger = slog.Default()
+
+		err := dev.Init(cfg)
+		logErr("Init", err)
+
+		err = dev.StartAP("geekotp", "password", 1)
+		logErr("StartAP", err)
+
+		addr, err := dev.HardwareAddr6()
+		logErr("HardwareAddr6", err)
+
+		addrs := hex.EncodeToString(addr[:])
+		println("MAC:", addrs[0], addrs[1], addrs[2], addrs[3], addrs[4], addrs[5])
+	}()
+
 	// Loop to update the time without blinking
 	for {
 		// Erase the old time by drawing spaces in black
@@ -62,5 +87,11 @@ func main() {
 		fmt.Print(currentTime, "\r\n")
 
 		time.Sleep(time.Second)
+	}
+}
+
+func logErr(msg string, err error) {
+	if err != nil {
+		slog.Error(msg + ": " + err.Error())
 	}
 }
