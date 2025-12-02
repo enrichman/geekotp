@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"tinygo.org/x/drivers/ssd1306"
+	"tinygo.org/x/tinyfont"
+	"tinygo.org/x/tinyfont/proggy"
 )
 
 var display *ssd1306.Device
@@ -25,36 +27,40 @@ func main() {
 	display.Configure(ssd1306.Config{
 		Address: 0x3C,
 		Width:   128,
-		Height:  64,
+		Height:  32,
 	})
 
 	display.ClearDisplay()
-	///////////////////
 
-	x := int16(0)
-	y := int16(0)
-	deltaX := int16(1)
-	deltaY := int16(1)
+	// Questo font è alto 8 pixel
+	font := &proggy.TinySZ8pt7b
+	white := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	black := color.RGBA{R: 0, G: 0, B: 0, A: 255}
 
+	tinyfont.WriteLine(display, font, 0, 8, "GeekOTP Ready", white)
+
+	display.Display()
+
+	time.Sleep(3 * time.Second)
+	display.ClearDisplay()
+
+	// Loop to update the time without blinking
 	for {
-		pixel := display.GetPixel(x, y)
-		c := color.RGBA{255, 255, 255, 255}
-		if pixel {
-			c = color.RGBA{0, 0, 0, 255}
-		}
-		display.SetPixel(x, y, c)
+		// Erase the old time by drawing spaces in black
+		// A larghezza di "10:00AM" è di 7 caratteri. Usiamo 8 spazi per sicurezza.
+
+		// Draw the new time
+		currentTime := time.Now().Format(time.TimeOnly)
+		tinyfont.WriteLine(display, font, 0, 12, "           ", black)
+		display.FillRectangle(0, 0, 128, 16, black)
+		tinyfont.WriteLine(display, font, 0, 12, currentTime, white)
+
+		// Update the display
 		display.Display()
 
-		x += deltaX
-		y += deltaY
+		// Print to console for debugging
+		fmt.Print(currentTime, "\r\n")
 
-		if x == 0 || x == 127 {
-			deltaX = -deltaX
-		}
-		if y == 0 || y == 63 {
-			deltaY = -deltaY
-		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(time.Second)
 	}
-
 }
