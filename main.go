@@ -2,21 +2,25 @@ package main
 
 import (
 	"fmt"
-	"image/color"
 	"machine"
 	"time"
 
-	"tinygo.org/x/drivers/ssd1306"
-	"tinygo.org/x/tinyfont"
-	"tinygo.org/x/tinyfont/proggy"
+	"tinygo.org/x/drivers/hd44780"
 )
 
-var (
-	display *ssd1306.Device
+// === 1. DEFINIZIONI DEI PIN (GPIO) ===
 
-	font  = &proggy.TinySZ8pt7b
-	white = color.RGBA{R: 255, G: 255, B: 255, A: 255}
-	black = color.RGBA{R: 0, G: 0, B: 0, A: 255}
+// Pin LCD HD44780 (Interfaccia 4-bit)
+const (
+	// data pins
+	D4_PIN = machine.GPIO8
+	D5_PIN = machine.GPIO9
+	D6_PIN = machine.GPIO10
+	D7_PIN = machine.GPIO11
+
+	// control pins
+	RS_PIN = machine.GPIO6 // Register Select
+	EN_PIN = machine.GPIO7 // Enable
 )
 
 func main() {
@@ -35,25 +39,35 @@ func main() {
 // runDisplayLoop gestisce tutta la logica del display.
 func runDisplayLoop() {
 	println("--- Initializing Display ---")
-	machine.I2C0.Configure(machine.I2CConfig{SDA: machine.GPIO4, SCL: machine.GPIO5})
-	display = ssd1306.NewI2C(machine.I2C0)
 
-	display.Configure(ssd1306.Config{
-		Width:  128,
-		Height: 32,
+	// 1. CONFIGURAZIONE LCD (HD44780)
+	// RS, EN, D4, D5, D6, D7
+
+	lcd, _ := hd44780.NewGPIO4Bit(
+		[]machine.Pin{D4_PIN, D5_PIN, D6_PIN, D7_PIN},
+		EN_PIN,
+		RS_PIN,
+		machine.NoPin,
+	)
+
+	lcd.Configure(hd44780.Config{
+		Width:  16,
+		Height: 2,
+		// CursorOnOff: true,
+		// CursorBlink: true,
 	})
 
-	display.ClearDisplay()
-	tinyfont.WriteLine(display, font, 0, 8, "GeekOTP", white)
-	tinyfont.WriteLine(display, font, 0, 16, "Status:", white)
-	tinyfont.WriteLine(display, font, 0, 24, "> Waiting...", white)
-	display.Display()
+	lcd.Write([]byte("GeekOTP"))
+	lcd.Display()
+
+	time.Sleep(time.Second)
 
 	for {
 		currentTime := time.Now().Format(time.TimeOnly)
-		display.FillRectangle(0, 0, 128, 16, black)
-		tinyfont.WriteLine(display, font, 60, 8, currentTime, white)
-		display.Display()
+
+		lcd.SetCursor(0, 1)
+		lcd.Write([]byte(currentTime))
+		lcd.Display()
 
 		// Print to console for debugging
 		fmt.Print(currentTime, "\r\n")
