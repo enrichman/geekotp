@@ -4,74 +4,53 @@ import (
 	"fmt"
 	"machine"
 	"time"
-
-	"tinygo.org/x/drivers/hd44780"
 )
 
-// === 1. DEFINIZIONI DEI PIN (GPIO) ===
+// === DEFINIZIONI PIN HARDWARE (2 PULSANTI) ===
 
-// Pin LCD HD44780 (Interfaccia 4-bit)
-const (
-	// data pins
-	D4_PIN = machine.GPIO8
-	D5_PIN = machine.GPIO9
-	D6_PIN = machine.GPIO10
-	D7_PIN = machine.GPIO11
+// Pulsante 1: Navigazione (NAV)
+const NAV_PIN = machine.GPIO14
 
-	// control pins
-	RS_PIN = machine.GPIO6 // Register Select
-	EN_PIN = machine.GPIO7 // Enable
-)
+// Pulsante 2: Selezione (SEL)
+const SELECT_PIN = machine.GPIO15
+
+// Variabile per il Debounce (ignora le letture troppo veloci)
+var lastInputTime time.Time
 
 func main() {
 	// Attesa per dare il tempo al monitor seriale di connettersi.
 	time.Sleep(2 * time.Second)
+
 	machine.InitSerial()
 	println("--- GeekOTP Starting ---")
+
+	// 1. Configurazione dei Pin
+	// Entrambi i pin sono configurati come Input con resistenza di PULL-UP (LOW quando premuto).
+	NAV_PIN.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	SELECT_PIN.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+
+	// Inizializza il timer Debounce
+	lastInputTime = time.Now()
 
 	// Avviamo i loop del display e delle notifiche in goroutine separate.
 	go runDisplayLoop()
 
-	// Blocca il main. Il server BLE e le altre goroutine continueranno a girare.
-	select {}
-}
-
-// runDisplayLoop gestisce tutta la logica del display.
-func runDisplayLoop() {
-	println("--- Initializing Display ---")
-
-	// 1. CONFIGURAZIONE LCD (HD44780)
-	// RS, EN, D4, D5, D6, D7
-
-	lcd, _ := hd44780.NewGPIO4Bit(
-		[]machine.Pin{D4_PIN, D5_PIN, D6_PIN, D7_PIN},
-		EN_PIN,
-		RS_PIN,
-		machine.NoPin,
-	)
-
-	lcd.Configure(hd44780.Config{
-		Width:  16,
-		Height: 2,
-		// CursorOnOff: true,
-		// CursorBlink: true,
-	})
-
-	lcd.Write([]byte("GeekOTP"))
-	lcd.Display()
-
-	time.Sleep(time.Second)
-
+	// 2. Loop Principale
 	for {
-		currentTime := time.Now().Format(time.TimeOnly)
+		// Controllo del Debounce: 150ms
+		if time.Since(lastInputTime) >= time.Millisecond*150 {
 
-		lcd.SetCursor(0, 1)
-		lcd.Write([]byte(currentTime))
-		lcd.Display()
+			// Legge lo stato del pin: !Get() è TRUE se premuto.
+			if !NAV_PIN.Get() {
+				fmt.Print("-> PULSANTE NAVIGAZIONE PREMUTO (GPIO 14)\r\n")
+				lastInputTime = time.Now()
+			} else if !SELECT_PIN.Get() {
+				fmt.Print("-> PULSANTE SELECT PREMUTO (GPIO 15)\r\n")
+				lastInputTime = time.Now()
+			}
+		}
 
-		// Print to console for debugging
-		fmt.Print(currentTime, "\r\n")
-
-		time.Sleep(time.Second)
+		// Pausa essenziale per lo scheduler cooperativo di TinyGo
+		time.Sleep(time.Millisecond * 10)
 	}
 }
