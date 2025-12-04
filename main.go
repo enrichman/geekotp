@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+func logger(msg string) {
+	fmt.Printf(msg + "\r\n")
+}
+
 // === DEFINIZIONI PIN HARDWARE (2 PULSANTI) ===
 
 // Pulsante 1: Navigazione (NAV)
@@ -21,12 +25,59 @@ var selectPressed bool
 // Variabile per il Debounce (ignora le letture troppo veloci)
 var lastInputTime time.Time
 
+type AppState int
+
+const (
+	INIT AppState = iota // Stato 0: Schermata iniziale/bloccata
+	MENU                 // Stato 1: Navigazione Menu
+)
+
+type MenuCategory struct {
+	Title   string       // Riga 1: Nome della Categoria
+	Options []MenuOption // Riga 2: Le opzioni all'interno
+}
+
+type MenuOption struct {
+	Text   string
+	Action func()
+}
+
+// Struttura del menu gerarchico
+var menu = []MenuCategory{
+	{
+		Title: "Bluetooth:",
+		Options: []MenuOption{
+			{"On", func() { logger("Bluetooth ON") }},
+			{"Off", func() { logger("Bluetooth OFF") }},
+			{"<- Back", nil},
+		},
+	},
+	{
+		Title: "Info:",
+		Options: []MenuOption{
+			{"Version", func() { logger("Mostra Versione") }},
+			{"Serial", func() { logger("Mostra Seriale") }},
+			{"<- Back", nil},
+		},
+	},
+}
+
+var (
+	currentState AppState = INIT
+
+	// Stato Menu
+	currentCategoryIndex int = 0
+	currentOptionIndex   int = 0
+
+	needsDisplayUpdate bool
+)
+
 func main() {
 	// Attesa per dare il tempo al monitor seriale di connettersi.
 	time.Sleep(2 * time.Second)
 
 	machine.InitSerial()
-	println("--- GeekOTP Starting ---")
+	logger("--- GeekOTP Starting ---")
 
 	// 1. Configurazione dei Pin
 	// Entrambi i pin sono configurati come Input con resistenza di PULL-UP (LOW quando premuto).
@@ -36,12 +87,18 @@ func main() {
 	// Inizializza il timer Debounce
 	lastInputTime = time.Now()
 
-	// Avviamo i loop del display e delle notifiche in goroutine separate.
-	go runDisplayLoop()
+	initDisplay()
 
 	// 2. Loop Principale
 	for {
 		handleInput()
+
+		// 3. Visualizzazione (Eseguita solo se c'è stato un cambiamento)
+		if needsDisplayUpdate {
+			updateMenuDisplay()
+			needsDisplayUpdate = false // Resetta il flag
+		}
+
 		time.Sleep(time.Millisecond * 10)
 	}
 }
@@ -51,45 +108,55 @@ func handleInput() {
 	isNavDown := !NAV_PIN.Get()
 	isSelectDown := !SELECT_PIN.Get()
 
-	// 2. Logica NAVIGAZIONE (GPIO 14)
+	// 2. Logica Debounce sul Rilascio (controlla il tempo trascorso)
+	if time.Since(lastInputTime) < time.Millisecond*150 {
+		// Aggiorna solo gli stati di pressione, ma esce
+		navPressed = isNavDown
+		selectPressed = isSelectDown
+		return
+	}
+
+	// 3. ESECUZIONE AZIONI NAVIGAZIONE (NAV_PIN)
 	if isNavDown {
-		// Il pulsante è premuto: lo registriamo
-		navPressed = true
-	} else {
-		// Il pulsante è rilasciato
-		if navPressed {
-			// Se era stato premuto in precedenza, eseguiamo l'azione
+		navPressed = true // Registra la pressione
+	} else if navPressed {
+		logger(fmt.Sprintf("IN currentState: %v - navpressed", currentState))
 
-			// Logica Debounce sul Rilascio:
-			if time.Since(lastInputTime) >= time.Millisecond*150 {
-				fmt.Printf("-> AZIONE NAVIGAZIONE (RILASCIO)\r\n")
-				// [QUI ANDRÀ LA LOGICA DI SCORRIMENTO DEL MENU]
-				lastInputTime = time.Now()
+		lastInputTime = time.Now()
+		navPressed = false // Resetta lo stato di pressione
+		needsDisplayUpdate = true
+
+		switch currentState {
+		case INIT:
+			currentState = MENU
+			currentCategoryIndex = 0
+		case MENU:
+			currentCategoryIndex++
+			if currentCategoryIndex >= len(menu) {
+				currentCategoryIndex = 0
 			}
-
-			// Resettiamo lo stato di pressione
-			navPressed = false
 		}
 	}
 
-	// 3. Logica SELEZIONE (GPIO 15)
+	// 4. ESECUZIONE AZIONI SELEZIONE (SELECT_PIN)
 	if isSelectDown {
-		// Il pulsante è premuto: lo registriamo
-		selectPressed = true
-	} else {
-		// Il pulsante è rilasciato
-		if selectPressed {
-			// Se era stato premuto in precedenza, eseguiamo l'azione
+		selectPressed = true // Registra la pressione
+	} else if selectPressed {
+		logger(fmt.Sprintf("IN currentState: %v - selectPressed", currentState))
 
-			// Logica Debounce sul Rilascio:
-			if time.Since(lastInputTime) >= time.Millisecond*150 {
-				fmt.Printf("-> AZIONE SELECT (RILASCIO)\r\n")
-				// [QUI ANDRÀ LA LOGICA DI SELEZIONE DEL MENU]
-				lastInputTime = time.Now()
+		lastInputTime = time.Now()
+		selectPressed = false // Resetta lo stato di pressione
+		needsDisplayUpdate = true
+
+		switch currentState {
+		case INIT:
+			currentState = MENU
+			currentCategoryIndex = 0
+		case MENU:
+			currentCategoryIndex++
+			if currentCategoryIndex >= len(menu) {
+				currentCategoryIndex = 0
 			}
-
-			// Resettiamo lo stato di pressione
-			selectPressed = false
 		}
 	}
 }

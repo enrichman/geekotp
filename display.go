@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"machine"
-	"time"
 
 	"tinygo.org/x/drivers/hd44780"
 )
@@ -23,14 +21,16 @@ const (
 	EN_PIN = machine.GPIO7 // Enable
 )
 
+var lcd hd44780.Device
+
 // runDisplayLoop gestisce tutta la logica del display.
-func runDisplayLoop() {
-	println("--- Initializing Display ---")
+func initDisplay() {
+	logger("--- Initializing Display ---")
 
 	// 1. CONFIGURAZIONE LCD (HD44780)
 	// RS, EN, D4, D5, D6, D7
 
-	lcd, _ := hd44780.NewGPIO4Bit(
+	lcd, _ = hd44780.NewGPIO4Bit(
 		[]machine.Pin{D4_PIN, D5_PIN, D6_PIN, D7_PIN},
 		EN_PIN,
 		RS_PIN,
@@ -46,19 +46,26 @@ func runDisplayLoop() {
 
 	lcd.Write([]byte("GeekOTP"))
 	lcd.Display()
+}
 
-	time.Sleep(time.Second)
+// Aggiorna la visualizzazione del menu sullo schermo LCD (logica gerarchica)
+func updateMenuDisplay() {
+	logger("Updating display...")
 
-	for {
-		currentTime := time.Now().Format(time.TimeOnly)
+	lcd.ClearDisplay()
 
-		lcd.SetCursor(0, 1)
-		lcd.Write([]byte(currentTime))
-		lcd.Display()
+	currentCategory := menu[currentCategoryIndex]
+	currentOtion := currentCategory.Options[currentOptionIndex]
 
-		// Print to console for debugging
-		fmt.Print(currentTime, "\r\n")
+	// RIGA 1: Titolo Categoria
+	lcd.SetCursor(0, 0)
+	lcd.Write([]byte(currentCategory.Title))
+	lcd.Display()
 
-		time.Sleep(time.Second)
-	}
+	// RIGA 2: Opzioni
+	lcd.SetCursor(0, 1)
+	lcd.Write([]byte(currentOtion.Text))
+	lcd.Display()
+
+	logger("Updating display: currentCategory " + currentCategory.Title)
 }
