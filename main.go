@@ -14,6 +14,10 @@ const NAV_PIN = machine.GPIO14
 // Pulsante 2: Selezione (SEL)
 const SELECT_PIN = machine.GPIO15
 
+// Variabili per tracciare lo stato di pressione dei pulsanti
+var navPressed bool
+var selectPressed bool
+
 // Variabile per il Debounce (ignora le letture troppo veloci)
 var lastInputTime time.Time
 
@@ -37,20 +41,55 @@ func main() {
 
 	// 2. Loop Principale
 	for {
-		// Controllo del Debounce: 150ms
-		if time.Since(lastInputTime) >= time.Millisecond*150 {
+		handleInput()
+		time.Sleep(time.Millisecond * 10)
+	}
+}
 
-			// Legge lo stato del pin: !Get() è TRUE se premuto.
-			if !NAV_PIN.Get() {
-				fmt.Print("-> PULSANTE NAVIGAZIONE PREMUTO (GPIO 14)\r\n")
-				lastInputTime = time.Now()
-			} else if !SELECT_PIN.Get() {
-				fmt.Print("-> PULSANTE SELECT PREMUTO (GPIO 15)\r\n")
+func handleInput() {
+	// 1. Lettura Stato Pin
+	isNavDown := !NAV_PIN.Get()
+	isSelectDown := !SELECT_PIN.Get()
+
+	// 2. Logica NAVIGAZIONE (GPIO 14)
+	if isNavDown {
+		// Il pulsante è premuto: lo registriamo
+		navPressed = true
+	} else {
+		// Il pulsante è rilasciato
+		if navPressed {
+			// Se era stato premuto in precedenza, eseguiamo l'azione
+
+			// Logica Debounce sul Rilascio:
+			if time.Since(lastInputTime) >= time.Millisecond*150 {
+				fmt.Printf("-> AZIONE NAVIGAZIONE (RILASCIO)\r\n")
+				// [QUI ANDRÀ LA LOGICA DI SCORRIMENTO DEL MENU]
 				lastInputTime = time.Now()
 			}
-		}
 
-		// Pausa essenziale per lo scheduler cooperativo di TinyGo
-		time.Sleep(time.Millisecond * 10)
+			// Resettiamo lo stato di pressione
+			navPressed = false
+		}
+	}
+
+	// 3. Logica SELEZIONE (GPIO 15)
+	if isSelectDown {
+		// Il pulsante è premuto: lo registriamo
+		selectPressed = true
+	} else {
+		// Il pulsante è rilasciato
+		if selectPressed {
+			// Se era stato premuto in precedenza, eseguiamo l'azione
+
+			// Logica Debounce sul Rilascio:
+			if time.Since(lastInputTime) >= time.Millisecond*150 {
+				fmt.Printf("-> AZIONE SELECT (RILASCIO)\r\n")
+				// [QUI ANDRÀ LA LOGICA DI SELEZIONE DEL MENU]
+				lastInputTime = time.Now()
+			}
+
+			// Resettiamo lo stato di pressione
+			selectPressed = false
+		}
 	}
 }
