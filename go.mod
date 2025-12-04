@@ -4,11 +4,13 @@ go 1.24.2
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/pquerna/otp v1.5.0
 	tinygo.org/x/bluetooth v0.13.0
 	tinygo.org/x/drivers v0.33.0
 )
 
 require (
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/saltosystems/winrt-go v0.0.0-20240509164145-4f7860a3bd2b // indirect
