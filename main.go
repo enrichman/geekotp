@@ -75,6 +75,8 @@ func main() {
 	lcd.ClearDisplay() // Clear screen once on startup
 
 	// 2. Main Loop
+	lastHeartbeat := time.Now()
+
 	for {
 		handleInput()
 
@@ -93,6 +95,12 @@ func main() {
 			}
 		case SHOW_CODE:
 			updateOTP()
+		}
+
+		// Serial heartbeat to keep the connection alive
+		if time.Since(lastHeartbeat) > 2*time.Second {
+			lastHeartbeat = time.Now()
+			fmt.Print("\r")
 		}
 
 		time.Sleep(time.Millisecond * 10)
