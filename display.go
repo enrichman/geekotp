@@ -1,14 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"machine"
 
 	"tinygo.org/x/drivers/hd44780"
 )
 
-// === 1. DEFINIZIONI DEI PIN (GPIO) ===
+// === 1. PIN DEFINITIONS (GPIO) ===
 
-// Pin LCD HD44780 (Interfaccia 4-bit)
+// HD44780 LCD Pins (4-bit interface)
 const (
 	// data pins
 	D4_PIN = machine.GPIO8
@@ -23,49 +24,54 @@ const (
 
 var lcd hd44780.Device
 
-// runDisplayLoop gestisce tutta la logica del display.
+// initDisplay initializes and configures the LCD.
 func initDisplay() {
 	logger("--- Initializing Display ---")
 
-	// 1. CONFIGURAZIONE LCD (HD44780)
-	// RS, EN, D4, D5, D6, D7
-
-	lcd, _ = hd44780.NewGPIO4Bit(
+	var err error
+	lcd, err = hd44780.NewGPIO4Bit(
 		[]machine.Pin{D4_PIN, D5_PIN, D6_PIN, D7_PIN},
 		EN_PIN,
 		RS_PIN,
 		machine.NoPin,
 	)
+	if err != nil {
+		logger("Failed to create new GPIO4Bit device: " + err.Error())
+		return
+	}
 
-	lcd.Configure(hd44780.Config{
+	config := hd44780.Config{
 		Width:  16,
 		Height: 2,
-		// CursorOnOff: true,
-		// CursorBlink: true,
-	})
+	}
 
-	lcd.Write([]byte("GeekOTP"))
+	if err := lcd.Configure(config); err != nil {
+		logger("Failed to configure display: " + err.Error())
+		return
+	}
+
+	lcd.Write([]byte("GeekOTP Starting"))
 	lcd.Display()
 }
 
-// Aggiorna la visualizzazione del menu sullo schermo LCD (logica gerarchica)
-func updateMenuDisplay() {
-	logger("Updating display...")
+// updateSimpleMenuDisplay updates the display for the simple menu.
+func updateSimpleMenuDisplay() {
+	logger("Updating simple menu display...")
 
 	lcd.ClearDisplay()
 
-	currentCategory := menu[currentCategoryIndex]
-	currentOtion := currentCategory.Options[currentOptionIndex]
-
-	// RIGA 1: Titolo Categoria
+	// Line 1: Menu Title
 	lcd.SetCursor(0, 0)
-	lcd.Write([]byte(currentCategory.Title))
+	lcd.Write([]byte("Menu:"))
 	lcd.Display()
 
-	// RIGA 2: Opzioni
+	// Line 2: Selected Option with ">"
+	optionText := menuOptions[currentMenuIndex]
+	displayText := fmt.Sprintf("> %s", optionText)
+
 	lcd.SetCursor(0, 1)
-	lcd.Write([]byte(currentOtion.Text))
+	lcd.Write([]byte(displayText))
 	lcd.Display()
 
-	logger("Updating display: currentCategory " + currentCategory.Title)
+	logger("Display updated with: " + displayText)
 }
