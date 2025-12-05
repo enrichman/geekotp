@@ -33,7 +33,8 @@ type AppState int
 const (
 	INIT         AppState = iota // State 0: Initial/OTP screen
 	MENU                         // State 1: Menu navigation
-	IN_MENU_ITEM                 // State 2: Inside a selected menu item
+	IN_MENU_ITEM                 // State 2: Inside a selected menu item (for static pages like 'info')
+	SHOW_CODE                    // State 3: Displaying the OTP code
 )
 
 // Simple menu structure
@@ -64,7 +65,6 @@ func main() {
 	logger("--- GeekOTP Starting ---")
 
 	// 1. Configure Pins
-	// Both pins are configured as Input with PULL-UP resistors (LOW when pressed).
 	NAV_PIN.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 	SELECT_PIN.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
@@ -80,39 +80,70 @@ func main() {
 
 		switch currentState {
 		case INIT:
-			// --- OTP DISPLAY LOGIC (INIT STATE) ---
 			lcd.SetCursor(0, 0)
 			lcd.Write([]byte("**  GeekOTP   **"))
 			lcd.Display()
-
 			lcd.SetCursor(0, 1)
 			lcd.Write([]byte("    v0.1    "))
 			lcd.Display()
 		case MENU:
-			// --- MENU DISPLAY LOGIC (MENU STATE) ---
 			if needsDisplayUpdate {
 				updateSimpleMenuDisplay()
 				needsDisplayUpdate = false // Reset the flag
 			}
+		case SHOW_CODE:
+			updateOTP()
 		}
 
 		time.Sleep(time.Millisecond * 10)
 	}
 }
 
+func updateOTP() {
+	if time.Since(lastOtp) > time.Second {
+		lastOtp = time.Now()
+		now := time.Now()
+
+		code, err := totp.GenerateCode(SECRET, now)
+		if err != nil {
+			logger("OTP generation error: " + err.Error())
+		}
+		code = fmt.Sprintf("%s-%s", code[:3], code[3:])
+
+		period := 30
+		remainingSeconds := int64(period) - (now.Unix() % int64(period))
+
+		if code != lastOTPCode {
+			lastOTPCode = code
+			lcd.SetCursor(0, 0)
+			lcd.Write([]byte("                ")) // Clear line
+			lcd.SetCursor(0, 0)
+			lcd.Write([]byte(code))
+			lcd.Display()
+		}
+
+		if remainingSeconds != lastRemainingSeconds {
+			lastRemainingSeconds = remainingSeconds
+			lcd.SetCursor(0, 1)
+			lcd.Write([]byte("                ")) // Clear line
+			lcd.SetCursor(0, 1)
+			line2 := fmt.Sprintf("Next in: %2ds", remainingSeconds)
+			lcd.Write([]byte(line2))
+			lcd.Display()
+		}
+	}
+}
+
 func handleInput() {
-	// 1. Read Pin State
 	isNavDown := !NAV_PIN.Get()
 	isSelectDown := !SELECT_PIN.Get()
 
-	// 2. Debounce Logic on Release (check elapsed time)
 	if time.Since(lastInputTime) < time.Millisecond*150 {
 		navPressed = isNavDown
 		selectPressed = isSelectDown
 		return
 	}
 
-	// 3. HANDLE NAVIGATION ACTION (NAV_PIN)
 	if isNavDown {
 		navPressed = true
 	} else if navPressed {
@@ -130,12 +161,11 @@ func handleInput() {
 			if currentMenuIndex >= len(menuOptions) {
 				currentMenuIndex = 0 // Loop back
 			}
-		case IN_MENU_ITEM:
-			// No action for NAV in this state for now
+		case IN_MENU_ITEM, SHOW_CODE:
+			// No action for NAV in these states
 		}
 	}
 
-	// 4. HANDLE SELECTION ACTION (SELECT_PIN)
 	if isSelectDown {
 		selectPressed = true
 	} else if selectPressed {
@@ -146,68 +176,28 @@ func handleInput() {
 
 		switch currentState {
 		case INIT:
-			// Same as NAV, go to menu
 			currentState = MENU
 			currentMenuIndex = 0
 		case MENU:
-			// Select an item
-			currentState = IN_MENU_ITEM
 			selectedItem := menuOptions[currentMenuIndex]
 			logger(fmt.Sprintf("Selected item: %s", selectedItem))
 
-			// Execute action based on selection
 			lcd.ClearDisplay()
-			lcd.SetCursor(0, 0)
 			if selectedItem == "code" {
-
-				if time.Since(lastOtp) > time.Second {
-					lastOtp = time.Now()
-					now := time.Now()
-
-					// Generate OTP code
-					code, err := totp.GenerateCode(SECRET, now)
-					if err != nil {
-						logger("OTP generation error: " + err.Error())
-					}
-
-					code = fmt.Sprintf("%s-%s", code[:3], code[3:])
-
-					// Calculate remaining time for the next code
-					period := 30
-					remainingSeconds := int64(period) - (now.Unix() % int64(period))
-
-					// Update line 1 (OTP) only if the code has changed
-					if code != lastOTPCode {
-						lastOTPCode = code
-						lcd.SetCursor(0, 0)
-						lcd.Write([]byte("                ")) // Clear line
-						lcd.SetCursor(0, 0)
-						lcd.Write([]byte(code))
-						lcd.Display()
-					}
-
-					// Update line 2 (countdown) only if the value has changed
-					if remainingSeconds != lastRemainingSeconds {
-						lastRemainingSeconds = remainingSeconds
-						lcd.SetCursor(0, 1)
-						lcd.Write([]byte("                ")) // Clear line
-						lcd.SetCursor(0, 1)
-						line2 := fmt.Sprintf("Next in: %2ds", remainingSeconds)
-						lcd.Write([]byte(line2))
-						lcd.Display()
-					}
-				}
-
+				currentState = SHOW_CODE
 			} else if selectedItem == "info" {
+				currentState = IN_MENU_ITEM
+				lcd.SetCursor(0, 0)
 				lcd.Write([]byte("Info Page"))
 				lcd.SetCursor(0, 1)
 				lcd.Write([]byte("GeekOTP v0.1"))
 				lcd.Display()
 			}
 
-		case IN_MENU_ITEM:
-			// Go back to the menu
+		case IN_MENU_ITEM, SHOW_CODE:
+			// Go back to the menu from 'info' or 'code' screen
 			currentState = MENU
+			lastOTPCode = ""
 		}
 	}
 }
