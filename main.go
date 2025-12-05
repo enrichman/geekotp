@@ -47,6 +47,10 @@ var (
 	currentState       AppState = INIT
 	currentMenuIndex   int      = 0
 	needsDisplayUpdate bool
+
+	// Screen timeout
+	lastActivityTime time.Time
+	isScreenOn       bool
 )
 
 const SECRET = "JBSWY3DPEHPK3PXP"
@@ -70,6 +74,8 @@ func main() {
 
 	// Initialize Debounce timer
 	lastInputTime = time.Now()
+	lastActivityTime = time.Now()
+	isScreenOn = true
 
 	initDisplay()
 	lcd.ClearDisplay() // Clear screen once on startup
@@ -80,21 +86,29 @@ func main() {
 	for {
 		handleInput()
 
-		switch currentState {
-		case INIT:
-			lcd.SetCursor(0, 0)
-			lcd.Write([]byte("**  GeekOTP   **"))
-			lcd.Display()
-			lcd.SetCursor(0, 1)
-			lcd.Write([]byte("    v0.1    "))
-			lcd.Display()
-		case MENU:
-			if needsDisplayUpdate {
-				updateSimpleMenuDisplay()
-				needsDisplayUpdate = false // Reset the flag
+		// --- Inactivity Screen Off ---
+		if isScreenOn && time.Since(lastActivityTime) > 10*time.Second {
+			turnScreenOff()
+			isScreenOn = false
+		}
+
+		if isScreenOn {
+			switch currentState {
+			case INIT:
+				lcd.SetCursor(0, 0)
+				lcd.Write([]byte("**  GeekOTP   **"))
+				lcd.Display()
+				lcd.SetCursor(0, 1)
+				lcd.Write([]byte("    v0.1    "))
+				lcd.Display()
+			case MENU:
+				if needsDisplayUpdate {
+					updateSimpleMenuDisplay()
+					needsDisplayUpdate = false // Reset the flag
+				}
+			case SHOW_CODE:
+				updateOTP()
 			}
-		case SHOW_CODE:
-			updateOTP()
 		}
 
 		// Serial heartbeat to keep the connection alive
@@ -152,11 +166,20 @@ func handleInput() {
 		return
 	}
 
+	// Any button press wakes the screen and resets the timer
+	if isNavDown || isSelectDown {
+		if !isScreenOn {
+			turnScreenOn()
+			isScreenOn = true
+			needsDisplayUpdate = true // Force redraw after wake-up
+		}
+		lastActivityTime = time.Now()
+	}
+
 	if isNavDown {
 		navPressed = true
 	} else if navPressed {
 		logger(fmt.Sprintf("NAV pressed in state: %v", currentState))
-		lastInputTime = time.Now()
 		navPressed = false
 		needsDisplayUpdate = true
 
@@ -178,7 +201,6 @@ func handleInput() {
 		selectPressed = true
 	} else if selectPressed {
 		logger(fmt.Sprintf("SELECT pressed in state: %v", currentState))
-		lastInputTime = time.Now()
 		selectPressed = false
 		needsDisplayUpdate = true
 

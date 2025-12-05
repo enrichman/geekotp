@@ -20,6 +20,9 @@ const (
 	// control pins
 	RS_PIN = machine.GPIO6 // Register Select
 	EN_PIN = machine.GPIO7 // Enable
+
+	// backlight pin
+	BACKLIGHT_PIN = machine.GPIO16
 )
 
 var lcd hd44780.Device
@@ -27,6 +30,10 @@ var lcd hd44780.Device
 // initDisplay initializes and configures the LCD.
 func initDisplay() {
 	logger("--- Initializing Display ---")
+
+	// Backlight
+	BACKLIGHT_PIN.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	BACKLIGHT_PIN.High()
 
 	var err error
 	lcd, err = hd44780.NewGPIO4Bit(
@@ -74,4 +81,14 @@ func updateSimpleMenuDisplay() {
 	lcd.Display()
 
 	logger("Display updated with: " + displayText)
+}
+
+func turnScreenOn() {
+	logger("Turning screen on")
+	BACKLIGHT_PIN.High()
+}
+
+func turnScreenOff() {
+	logger("Turning screen off")
+	BACKLIGHT_PIN.Low()
 }
